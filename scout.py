@@ -329,7 +329,7 @@ def render_email(result: dict, posts_scanned: int) -> tuple[str, str]:
     ideas = result["ideas"]
     worth_count = sum(1 for idea in ideas if idea["total"] >= WORTH_IT_THRESHOLD)
     top_pick = ideas[0] if ideas and ideas[0]["total"] >= WORTH_IT_THRESHOLD else None
-    runners_up = ideas[1:3] if top_pick else ideas[:3]
+    runners_up = ideas[1:5] if top_pick else ideas[:5]
 
     env = Environment(
         loader=FileSystemLoader(Path(__file__).resolve().parent),

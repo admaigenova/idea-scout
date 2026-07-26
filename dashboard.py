@@ -1,7 +1,11 @@
 """Generate the static dashboard (docs/index.html) from the logged ideas.
 
-The page is fully self-contained — records are embedded as JSON, so it works
-opened from disk or served by GitHub Pages, with no backend.
+The page is fully self-contained — records are embedded as JSON and the two
+charts are hand-rolled SVG — so it works opened from disk or served by GitHub
+Pages, with no backend and no external libraries.
+
+Chart colors come from a pre-validated categorical palette (colorblind-safe in
+its documented order): blue, orange, aqua, yellow, magenta.
 """
 
 from __future__ import annotations
@@ -18,34 +22,71 @@ _TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Idea Scout dashboard</title>
 <style>
-  :root { color-scheme: light; }
+  :root {
+    color-scheme: light;
+    --plane: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --ring: rgba(11, 11, 11, 0.10);
+    --s1: #2a78d6;
+    --s2: #eb6834;
+  }
   * { box-sizing: border-box; margin: 0; }
-  body { background: #f4f4f5; color: #18181b; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 32px 16px 64px; }
-  .wrap { max-width: 880px; margin: 0 auto; }
-  .brand { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #4f46e5; }
-  h1 { font-size: 26px; padding-top: 6px; }
-  .updated { color: #71717a; font-size: 13px; padding-top: 4px; }
-  .stats { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 16px; }
-  .stat { background: #ffffff; border: 1px solid #e4e4e7; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #71717a; }
-  .stat b { color: #18181b; font-size: 15px; }
-  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 22px 0 14px; }
-  .metricbar { display: flex; flex-wrap: wrap; gap: 8px; }
-  .metric { border: 1px solid #e4e4e7; background: #ffffff; color: #3f3f46; border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
-  .metric.active { background: #18181b; border-color: #18181b; color: #ffffff; }
-  select { margin-left: auto; border: 1px solid #e4e4e7; background: #ffffff; border-radius: 8px; padding: 7px 10px; font-size: 13px; color: #3f3f46; }
-  .card { display: flex; gap: 14px; background: #ffffff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 16px 18px; margin-bottom: 10px; }
-  .rank { flex: none; width: 34px; height: 34px; border-radius: 8px; background: #f4f4f5; color: #71717a; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 14px; }
-  .cardbody { min-width: 0; flex: 1; }
-  .card h2 { font-size: 16px; line-height: 1.35; font-weight: 600; }
-  .card h2 a { color: #18181b; }
-  .meta { color: #71717a; font-size: 12.5px; padding-top: 3px; }
-  .seen { color: #4f46e5; font-weight: 600; }
-  .summary { color: #52525b; font-size: 13.5px; line-height: 1.55; padding-top: 8px; }
-  .scoreside { flex: none; text-align: right; }
-  .big { font-size: 22px; font-weight: 700; }
-  .big span { font-size: 12px; font-weight: 400; color: #a1a1aa; }
-  .totalchip { display: inline-block; margin-top: 6px; background: #f4f4f5; border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: 700; }
-  .empty { background: #ffffff; border: 1px dashed #d4d4d8; border-radius: 12px; padding: 40px 20px; text-align: center; color: #71717a; }
+  body { background: var(--plane); color: var(--ink); font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 36px 18px 72px; }
+  .wrap { max-width: 1060px; margin: 0 auto; }
+  .brand { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--s1); }
+  h1 { font-size: 30px; letter-spacing: -0.02em; padding-top: 6px; }
+  .updated { color: var(--muted); font-size: 13px; padding-top: 5px; }
+  .filterrow { display: flex; padding: 22px 0 16px; }
+  .seg { border: 1px solid var(--ring); background: var(--surface); padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--ink2); cursor: pointer; }
+  .seg:first-child { border-radius: 9px 0 0 9px; }
+  .seg:last-child { border-radius: 0 9px 9px 0; }
+  .seg + .seg { border-left: 0; }
+  .seg.active { background: var(--ink); color: #ffffff; border-color: var(--ink); }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 14px; padding: 15px 18px; box-shadow: 0 1px 2px rgba(11, 11, 11, 0.04); }
+  .tile .label { font-size: 12.5px; color: var(--muted); }
+  .tile .value { font-size: 29px; font-weight: 650; padding-top: 3px; letter-spacing: -0.01em; }
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 12px; }
+  @media (max-width: 760px) { .charts { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 14px; box-shadow: 0 1px 2px rgba(11, 11, 11, 0.04); }
+  .chartcard { padding: 15px 16px 8px; }
+  .cardtitle { font-size: 13px; font-weight: 650; color: var(--ink2); }
+  svg { display: block; width: 100%; height: auto; }
+  .listcard { margin-top: 12px; padding: 16px 20px 8px; }
+  .listhead { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; padding-bottom: 6px; }
+  .metricbar { display: flex; flex-wrap: wrap; gap: 6px; }
+  .metric { border: 1px solid var(--ring); background: var(--surface); color: var(--ink2); border-radius: 999px; padding: 6px 12px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .metric.active { background: var(--ink); border-color: var(--ink); color: #ffffff; }
+  .idea { display: flex; gap: 14px; border-top: 1px solid var(--grid); padding: 16px 2px; }
+  #list .idea:first-child { border-top: 0; }
+  .rank { flex: none; width: 34px; height: 34px; border-radius: 10px; background: #f1f0ec; color: var(--ink2); font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 13.5px; }
+  .rank.r1 { background: var(--ink); color: #ffffff; }
+  .ibody { flex: 1; min-width: 0; }
+  .idea h2 { font-size: 16px; line-height: 1.35; font-weight: 650; }
+  .idea h2 a { color: var(--ink); }
+  .meta { color: var(--muted); font-size: 12.5px; padding-top: 3px; }
+  .seen { color: var(--s1); font-weight: 650; }
+  .summary { color: var(--ink2); font-size: 13.5px; line-height: 1.55; padding-top: 8px; }
+  .meters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px 18px; padding-top: 13px; }
+  .mlabel { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  .mlabel b { color: var(--ink); font-weight: 650; }
+  .track { height: 6px; border-radius: 3px; margin-top: 4px; }
+  .fill { height: 6px; border-radius: 3px; }
+  .scoreside { flex: none; text-align: right; min-width: 64px; }
+  .big { font-size: 24px; font-weight: 700; }
+  .big span { font-size: 12px; color: var(--muted); font-weight: 400; }
+  .totalchip { display: inline-block; margin-top: 6px; background: #f1f0ec; border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: 650; color: var(--ink2); }
+  .empty { border: 1px dashed var(--baseline); border-radius: 12px; padding: 40px 20px; text-align: center; color: var(--muted); margin: 8px 0 14px; }
+  .foot { padding-top: 20px; font-size: 12.5px; color: var(--muted); }
+  .foot a { color: var(--ink2); }
+  .tooltip { position: fixed; z-index: 10; background: var(--ink); color: #ffffff; border-radius: 8px; padding: 7px 10px; font-size: 12px; line-height: 1.45; pointer-events: none; max-width: 240px; box-shadow: 0 4px 14px rgba(11, 11, 11, 0.25); }
+  .tooltip b { font-size: 13px; }
+  .tooltip[hidden] { display: none; }
 </style>
 </head>
 <body>
@@ -53,19 +94,51 @@ _TEMPLATE = """<!DOCTYPE html>
   <div class="brand">Idea Scout</div>
   <h1>Top ideas dashboard</h1>
   <div class="updated">Updated __UPDATED__</div>
-  <div class="stats" id="stats"></div>
-  <div class="controls">
-    <span class="metricbar" id="metrics"></span>
-    <select id="window">
-      <option value="0">All time</option>
-      <option value="30">Last 30 days</option>
-      <option value="7">Last 7 days</option>
-    </select>
+
+  <div class="filterrow" id="windowseg">
+    <button class="seg active" data-days="0">All time</button>
+    <button class="seg" data-days="30">Last 30 days</button>
+    <button class="seg" data-days="7">Last 7 days</button>
   </div>
-  <div id="list"></div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="charts" id="charts">
+    <div class="card chartcard">
+      <div class="cardtitle">Ideas logged per day</div>
+      <div id="chart-count"></div>
+    </div>
+    <div class="card chartcard">
+      <div class="cardtitle">Best idea score per day</div>
+      <div id="chart-best"></div>
+    </div>
+  </div>
+
+  <section class="card listcard">
+    <div class="listhead">
+      <div class="cardtitle">Top 5 ideas</div>
+      <span class="metricbar" id="metrics"></span>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <div class="foot">
+    <a href="https://github.com/admaigenova/idea-scout/blob/main/data/ideas.csv">Raw data (CSV)</a>
+    &middot; Idea Scout, an automated daily digest of Hacker News and Reddit
+  </div>
 </div>
+<div class="tooltip" id="tooltip" hidden></div>
 <script>
 const RECORDS = __DATA__;
+const SVGNS = "http://www.w3.org/2000/svg";
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const DIMS = [
+  { key: "payer", label: "Payer", color: "#2a78d6" },
+  { key: "demand", label: "Demand", color: "#eb6834" },
+  { key: "revenue_3mo", label: "Revenue 3 mo", color: "#1baf7a" },
+  { key: "buildable", label: "Buildable", color: "#eda100" },
+  { key: "difficulty", label: "Difficulty", color: "#e87ba4" }
+];
 const METRICS = [
   { id: "total", label: "Overall", key: "total", asc: false, decimals: 1 },
   { id: "payer", label: "Payer", key: "payer", asc: false, decimals: 0 },
@@ -77,6 +150,32 @@ const METRICS = [
 let activeMetric = METRICS[0];
 let windowDays = 0;
 
+const tip = document.getElementById("tooltip");
+function showTip(value, label) {
+  tip.textContent = "";
+  const b = document.createElement("b");
+  b.textContent = value;
+  tip.appendChild(b);
+  tip.appendChild(document.createElement("br"));
+  tip.append(label);
+  tip.hidden = false;
+}
+function moveTip(evt) {
+  const pad = 12;
+  const r = tip.getBoundingClientRect();
+  let x = evt.clientX + pad;
+  let y = evt.clientY + pad;
+  if (x + r.width > window.innerWidth - 8) x = evt.clientX - r.width - pad;
+  if (y + r.height > window.innerHeight - 8) y = evt.clientY - r.height - pad;
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+}
+function hideTip() { tip.hidden = true; }
+
+function shortDate(d) {
+  const p = d.split("-");
+  return parseInt(p[2], 10) + " " + MONTHS[parseInt(p[1], 10) - 1];
+}
 function withinWindow(dateStr) {
   if (!windowDays) return true;
   const cutoff = new Date();
@@ -84,7 +183,9 @@ function withinWindow(dateStr) {
   cutoff.setDate(cutoff.getDate() - windowDays);
   return new Date(dateStr + "T00:00:00") >= cutoff;
 }
-
+function visibleRows() {
+  return RECORDS.filter(function (r) { return withinWindow(r.date); });
+}
 function dedupe(rows) {
   const groups = new Map();
   for (const row of rows) {
@@ -103,25 +204,208 @@ function dedupe(rows) {
     return copy;
   });
 }
+function byDay(rows) {
+  const m = new Map();
+  for (const r of rows) {
+    const g = m.get(r.date) || { date: r.date, count: 0, best: 0 };
+    g.count += 1;
+    if (r.total > g.best) g.best = r.total;
+    m.set(r.date, g);
+  }
+  return Array.from(m.values())
+    .sort(function (a, b) { return a.date < b.date ? -1 : 1; })
+    .slice(-30);
+}
 
-function renderStats() {
-  const stats = document.getElementById("stats");
-  stats.textContent = "";
-  const dates = new Set(RECORDS.map(function (r) { return r.date; }));
+function svgEl(tag, attrs) {
+  const el = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) el.setAttribute(k, attrs[k]);
+  return el;
+}
+
+function chartFrame(container, ticks, yMax, fmt) {
+  const W = 520, H = 190, padL = 34, padR = 40, padT = 16, padB = 26;
+  container.textContent = "";
+  const svg = svgEl("svg", { viewBox: "0 0 " + W + " " + H });
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const y = function (v) { return padT + plotH * (1 - v / yMax); };
+  ticks.forEach(function (t) {
+    svg.appendChild(svgEl("line", {
+      x1: padL, x2: W - padR, y1: y(t), y2: y(t),
+      stroke: t === 0 ? "#c3c2b7" : "#e1e0d9", "stroke-width": 1
+    }));
+    const lbl = svgEl("text", {
+      x: padL - 6, y: y(t) + 3.5, "text-anchor": "end",
+      "font-size": 10, fill: "#898781", style: "font-variant-numeric: tabular-nums;"
+    });
+    lbl.textContent = fmt ? fmt(t) : String(t);
+    svg.appendChild(lbl);
+  });
+  container.appendChild(svg);
+  return { svg: svg, W: W, H: H, padL: padL, padR: padR, padT: padT, padB: padB, plotW: plotW, plotH: plotH, y: y };
+}
+
+function xLabels(f, days, xAt) {
+  const step = Math.max(1, Math.ceil(days.length / 5));
+  days.forEach(function (d, i) {
+    if (i % step !== 0 && i !== days.length - 1) return;
+    const lbl = svgEl("text", {
+      x: xAt(i), y: f.H - 8, "text-anchor": "middle",
+      "font-size": 10, fill: "#898781"
+    });
+    lbl.textContent = shortDate(d.date);
+    f.svg.appendChild(lbl);
+  });
+}
+
+function barChart(container, days) {
+  const maxC = Math.max.apply(null, days.map(function (d) { return d.count; }).concat([1]));
+  const step = Math.max(1, Math.ceil(maxC / 3));
+  const top = step * Math.ceil(maxC / step);
+  const ticks = [];
+  for (let t = 0; t <= top; t += step) ticks.push(t);
+  const f = chartFrame(container, ticks, top);
+  const band = f.plotW / days.length;
+  const bw = Math.min(24, Math.max(3, band - 2));
+  const xAt = function (i) { return f.padL + band * i + band / 2; };
+  let maxI = 0;
+  days.forEach(function (d, i) { if (d.count > days[maxI].count) maxI = i; });
+  days.forEach(function (d, i) {
+    const x = f.padL + band * i + (band - bw) / 2;
+    const h = f.plotH * (d.count / top);
+    const yTop = f.y(d.count);
+    const r = Math.min(4, bw / 2, h);
+    const y0 = f.padT + f.plotH;
+    let path;
+    if (h <= 0.5) {
+      path = "M " + x + " " + y0 + " L " + (x + bw) + " " + y0;
+    } else {
+      path = "M " + x + " " + y0 +
+        " L " + x + " " + (yTop + r) +
+        " Q " + x + " " + yTop + " " + (x + r) + " " + yTop +
+        " L " + (x + bw - r) + " " + yTop +
+        " Q " + (x + bw) + " " + yTop + " " + (x + bw) + " " + (yTop + r) +
+        " L " + (x + bw) + " " + y0 + " Z";
+    }
+    const bar = svgEl("path", { d: path, fill: "#2a78d6" });
+    f.svg.appendChild(bar);
+    if (i === maxI && d.count > 0) {
+      const lbl = svgEl("text", {
+        x: xAt(i), y: yTop - 5, "text-anchor": "middle",
+        "font-size": 10, "font-weight": 650, fill: "#52514e"
+      });
+      lbl.textContent = String(d.count);
+      f.svg.appendChild(lbl);
+    }
+    const hit = svgEl("rect", {
+      x: f.padL + band * i, y: f.padT, width: band, height: f.plotH, fill: "transparent"
+    });
+    hit.addEventListener("pointerenter", function () { bar.setAttribute("fill-opacity", "0.8"); });
+    hit.addEventListener("pointermove", function (evt) {
+      showTip(d.count + (d.count === 1 ? " idea" : " ideas"), shortDate(d.date));
+      moveTip(evt);
+    });
+    hit.addEventListener("pointerleave", function () { bar.removeAttribute("fill-opacity"); hideTip(); });
+    f.svg.appendChild(hit);
+  });
+  xLabels(f, days, xAt);
+}
+
+function lineChart(container, days) {
+  const f = chartFrame(container, [0, 2, 4, 6, 8, 10], 10);
+  const xAt = function (i) {
+    return days.length === 1 ? f.padL + f.plotW / 2 : f.padL + f.plotW * (i / (days.length - 1));
+  };
+  const pts = days.map(function (d, i) { return [xAt(i), f.y(d.best)]; });
+  if (pts.length > 1) {
+    const yBase = f.padT + f.plotH;
+    let area = "M " + pts[0][0] + " " + yBase;
+    let line = "";
+    pts.forEach(function (p, i) {
+      area += " L " + p[0] + " " + p[1];
+      line += (i === 0 ? "M " : " L ") + p[0] + " " + p[1];
+    });
+    area += " L " + pts[pts.length - 1][0] + " " + yBase + " Z";
+    f.svg.appendChild(svgEl("path", { d: area, fill: "#eb6834", "fill-opacity": "0.1" }));
+    f.svg.appendChild(svgEl("path", {
+      d: line, fill: "none", stroke: "#eb6834", "stroke-width": 2,
+      "stroke-linejoin": "round", "stroke-linecap": "round"
+    }));
+  }
+  pts.forEach(function (p) {
+    f.svg.appendChild(svgEl("circle", {
+      cx: p[0], cy: p[1], r: 4.5, fill: "#eb6834", stroke: "#fcfcfb", "stroke-width": 2
+    }));
+  });
+  const last = days[days.length - 1];
+  const endLbl = svgEl("text", {
+    x: pts[pts.length - 1][0] + 8, y: pts[pts.length - 1][1] + 3.5,
+    "font-size": 11, "font-weight": 650, fill: "#52514e"
+  });
+  endLbl.textContent = Number(last.best).toFixed(1);
+  f.svg.appendChild(endLbl);
+
+  const hair = svgEl("line", {
+    x1: 0, x2: 0, y1: f.padT, y2: f.padT + f.plotH,
+    stroke: "#c3c2b7", "stroke-width": 1, visibility: "hidden"
+  });
+  f.svg.appendChild(hair);
+  const overlay = svgEl("rect", {
+    x: f.padL, y: f.padT, width: f.plotW, height: f.plotH, fill: "transparent"
+  });
+  overlay.addEventListener("pointermove", function (evt) {
+    const box = f.svg.getBoundingClientRect();
+    const mx = (evt.clientX - box.left) * (f.W / box.width);
+    let nearest = 0;
+    pts.forEach(function (p, i) { if (Math.abs(p[0] - mx) < Math.abs(pts[nearest][0] - mx)) nearest = i; });
+    hair.setAttribute("x1", pts[nearest][0]);
+    hair.setAttribute("x2", pts[nearest][0]);
+    hair.setAttribute("visibility", "visible");
+    showTip(Number(days[nearest].best).toFixed(1) + " /10", "best score · " + shortDate(days[nearest].date));
+    moveTip(evt);
+  });
+  overlay.addEventListener("pointerleave", function () {
+    hair.setAttribute("visibility", "hidden");
+    hideTip();
+  });
+  f.svg.appendChild(overlay);
+  xLabels(f, days, xAt);
+}
+
+function renderTiles(rows) {
+  const tiles = document.getElementById("tiles");
+  tiles.textContent = "";
+  const dates = new Set(rows.map(function (r) { return r.date; }));
+  let best = 0;
+  rows.forEach(function (r) { if (r.total > best) best = r.total; });
   const pairs = [
-    ["ideas logged", RECORDS.length],
-    ["unique ideas", dedupe(RECORDS).length],
-    ["days covered", dates.size]
+    ["Ideas logged", String(rows.length)],
+    ["Unique ideas", String(dedupe(rows).length)],
+    ["Days covered", String(dates.size)],
+    ["Best score", rows.length ? Number(best).toFixed(1) : "—"]
   ];
   pairs.forEach(function (pair) {
-    const el = document.createElement("div");
-    el.className = "stat";
-    const b = document.createElement("b");
-    b.textContent = pair[1];
-    el.appendChild(b);
-    el.append(" " + pair[0]);
-    stats.appendChild(el);
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    const label = document.createElement("div");
+    label.className = "label";
+    label.textContent = pair[0];
+    const value = document.createElement("div");
+    value.className = "value";
+    value.textContent = pair[1];
+    tile.appendChild(label);
+    tile.appendChild(value);
+    tiles.appendChild(tile);
   });
+}
+
+function renderCharts(rows) {
+  const days = byDay(rows);
+  const section = document.getElementById("charts");
+  if (!days.length) { section.style.display = "none"; return; }
+  section.style.display = "";
+  barChart(document.getElementById("chart-count"), days);
+  lineChart(document.getElementById("chart-best"), days);
 }
 
 function renderControls() {
@@ -131,13 +415,13 @@ function renderControls() {
     const btn = document.createElement("button");
     btn.className = "metric" + (m === activeMetric ? " active" : "");
     btn.textContent = m.label;
-    btn.onclick = function () { activeMetric = m; renderControls(); build(); };
+    btn.onclick = function () { activeMetric = m; renderControls(); renderList(); };
     bar.appendChild(btn);
   });
 }
 
-function build() {
-  const rows = dedupe(RECORDS.filter(function (r) { return withinWindow(r.date); }));
+function renderList() {
+  const rows = dedupe(visibleRows());
   rows.sort(function (a, b) {
     const diff = activeMetric.asc
       ? a[activeMetric.key] - b[activeMetric.key]
@@ -155,15 +439,15 @@ function build() {
     return;
   }
   top.forEach(function (row, i) {
-    const card = document.createElement("div");
-    card.className = "card";
+    const idea = document.createElement("div");
+    idea.className = "idea";
 
     const rank = document.createElement("div");
-    rank.className = "rank";
+    rank.className = "rank" + (i === 0 ? " r1" : "");
     rank.textContent = "#" + (i + 1);
 
     const body = document.createElement("div");
-    body.className = "cardbody";
+    body.className = "ibody";
     const h2 = document.createElement("h2");
     const link = document.createElement("a");
     link.href = row.url;
@@ -183,9 +467,32 @@ function build() {
     const summary = document.createElement("div");
     summary.className = "summary";
     summary.textContent = row.summary;
+    const meters = document.createElement("div");
+    meters.className = "meters";
+    DIMS.forEach(function (dim) {
+      const meter = document.createElement("div");
+      const mlabel = document.createElement("div");
+      mlabel.className = "mlabel";
+      mlabel.append(dim.label);
+      const b = document.createElement("b");
+      b.textContent = String(row[dim.key]);
+      mlabel.appendChild(b);
+      const track = document.createElement("div");
+      track.className = "track";
+      track.style.background = dim.color + "26";
+      const fill = document.createElement("div");
+      fill.className = "fill";
+      fill.style.background = dim.color;
+      fill.style.width = (row[dim.key] * 10) + "%";
+      track.appendChild(fill);
+      meter.appendChild(mlabel);
+      meter.appendChild(track);
+      meters.appendChild(meter);
+    });
     body.appendChild(h2);
     body.appendChild(meta);
     body.appendChild(summary);
+    body.appendChild(meters);
 
     const side = document.createElement("div");
     side.className = "scoreside";
@@ -204,21 +511,32 @@ function build() {
       side.appendChild(chip);
     }
 
-    card.appendChild(rank);
-    card.appendChild(body);
-    card.appendChild(side);
-    list.appendChild(card);
+    idea.appendChild(rank);
+    idea.appendChild(body);
+    idea.appendChild(side);
+    list.appendChild(idea);
   });
 }
 
-document.getElementById("window").onchange = function () {
-  windowDays = parseInt(this.value, 10);
-  build();
-};
+function renderAll() {
+  const rows = visibleRows();
+  renderTiles(rows);
+  renderCharts(rows);
+  renderList();
+}
 
-renderStats();
+document.getElementById("windowseg").addEventListener("click", function (evt) {
+  const btn = evt.target.closest(".seg");
+  if (!btn) return;
+  windowDays = parseInt(btn.getAttribute("data-days"), 10);
+  Array.prototype.forEach.call(document.querySelectorAll(".seg"), function (el) {
+    el.className = "seg" + (el === btn ? " active" : "");
+  });
+  renderAll();
+});
+
 renderControls();
-build();
+renderAll();
 </script>
 </body>
 </html>

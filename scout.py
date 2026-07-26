@@ -284,7 +284,9 @@ def _normalise(result: dict, posts: list[Post]) -> dict:
 
 
 def analyse(posts: list[Post]) -> dict:
-    client = Anthropic()  # reads ANTHROPIC_API_KEY from the environment
+    # .strip(): a key pasted into a secret store with a trailing newline makes
+    # an illegal HTTP header, which surfaces as a bare "Connection error".
+    client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"].strip())
     messages = [
         {
             "role": "user",
@@ -351,7 +353,7 @@ def render_email(result: dict, posts_scanned: int) -> tuple[str, str]:
 # ---------------------------------------------------------------------------
 
 def send_email(subject: str, body: str) -> None:
-    resend.api_key = os.environ["RESEND_API_KEY"]
+    resend.api_key = os.environ["RESEND_API_KEY"].strip()
     recipients = [addr.strip() for addr in os.environ["EMAIL_TO"].split(",") if addr.strip()]
     sent = resend.Emails.send(
         {"from": EMAIL_FROM, "to": recipients, "subject": subject, "html": body}
@@ -372,7 +374,7 @@ def main() -> None:
     load_dotenv()
     dry_run = "--dry-run" in sys.argv[1:]
     required = ["ANTHROPIC_API_KEY"] if dry_run else ["ANTHROPIC_API_KEY", "RESEND_API_KEY", "EMAIL_TO"]
-    missing = [name for name in required if not os.environ.get(name)]
+    missing = [name for name in required if not os.environ.get(name, "").strip()]
     if missing:
         sys.exit(f"Missing environment variables: {', '.join(missing)}")
 

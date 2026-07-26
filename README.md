@@ -93,7 +93,7 @@ Every real (non-dry-run) run appends the full ranked list — up to 10 ideas,
 more than the email shows — to [data/ideas.csv](data/ideas.csv) and regenerates
 [docs/index.html](docs/index.html): **The Scout Report**, a self-contained
 dashboard with decision-focused KPIs (worth pursuing, quick wins, repeat
-signals, best score), two trend charts, and the top 5 prospects ranked by
+signals, best score), two trend charts, and the top 10 prospects ranked by
 Overall score, Payer, Demand, Revenue 3 mo, Buildable, or Easiest-to-build,
 filterable to the last 7/30 days. Ideas seen on multiple days are deduplicated
 and marked "seen N×". The workflow commits both files back after each run.

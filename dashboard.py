@@ -1,4 +1,4 @@
-"""Generate the static dashboard (docs/index.html) from the logged ideas.
+"""Generate The Scout Report (docs/index.html) from the logged ideas.
 
 The page is fully self-contained — records are embedded as JSON and the two
 charts are hand-rolled SVG — so it works opened from disk or served by GitHub
@@ -442,7 +442,7 @@ function renderList() {
       : b[activeMetric.key] - a[activeMetric.key];
     return diff !== 0 ? diff : b.total - a.total;
   });
-  const top = rows.slice(0, 5);
+  const top = rows.slice(0, 10);
   const list = document.getElementById("list");
   list.textContent = "";
   if (!top.length) {

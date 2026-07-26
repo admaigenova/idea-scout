@@ -79,7 +79,7 @@
   <div class="brand">Idea Scout</div>
   <h1>The Scout Report</h1>
   <div class="tagline">Startup ideas scouted daily from Hacker News and Reddit, rated for a solo builder.</div>
-  <div class="updated">Updated Monday 27 July 2026, 01:07 AEST</div>
+  <div class="updated">Updated Monday 27 July 2026, 01:12 AEST</div>
 
   <div class="filterrow" id="windowseg">
     <button class="seg active" data-days="0">All time</button>
@@ -425,7 +425,7 @@ function renderList() {
       : b[activeMetric.key] - a[activeMetric.key];
     return diff !== 0 ? diff : b.total - a.total;
   });
-  const top = rows.slice(0, 5);
+  const top = rows.slice(0, 10);
   const list = document.getElementById("list");
   list.textContent = "";
   if (!top.length) {

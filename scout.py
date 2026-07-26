@@ -28,7 +28,9 @@ from anthropic import Anthropic
 from dotenv import load_dotenv
 from jinja2 import Environment, FileSystemLoader
 
+from dashboard import write_dashboard
 from prompts import FIX_JSON_PROMPT, SCORING_PROMPT, SYSTEM_PROMPT
+from store import append_ideas, load_ideas
 
 MODEL = "claude-haiku-4-5"
 MAX_TOKENS = 5000  # headroom for 10 ideas with 3-5 sentence summaries
@@ -394,9 +396,20 @@ def main() -> None:
     if dry_run:
         Path("preview.html").write_text(body, encoding="utf-8")
         print(f"[dry-run] subject: {subject}")
-        print("[dry-run] wrote preview.html — nothing was sent")
+        print("[dry-run] wrote preview.html — nothing was sent or logged")
         return
+
     send_email(subject, body)
+
+    # Persist the day's ideas and refresh the static dashboard; the workflow
+    # commits both files back to the repo after this script exits.
+    stamp = datetime.now(LOCAL_TZ)
+    written = append_ideas(result["ideas"], f"{stamp:%Y-%m-%d}")
+    records = load_ideas()
+    dashboard_path = write_dashboard(
+        records, updated=f"{stamp:%A} {stamp.day} {stamp:%B %Y}, {stamp:%H:%M %Z}"
+    )
+    print(f"[store] logged {written} ideas ({len(records)} rows total); refreshed {dashboard_path.name}")
 
 
 if __name__ == "__main__":

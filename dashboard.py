@@ -1,0 +1,233 @@
+"""Generate the static dashboard (docs/index.html) from the logged ideas.
+
+The page is fully self-contained — records are embedded as JSON, so it works
+opened from disk or served by GitHub Pages, with no backend.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+DASHBOARD_FILE = Path(__file__).resolve().parent / "docs" / "index.html"
+
+_TEMPLATE = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Idea Scout dashboard</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; margin: 0; }
+  body { background: #f4f4f5; color: #18181b; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; padding: 32px 16px 64px; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+  .brand { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #4f46e5; }
+  h1 { font-size: 26px; padding-top: 6px; }
+  .updated { color: #71717a; font-size: 13px; padding-top: 4px; }
+  .stats { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 16px; }
+  .stat { background: #ffffff; border: 1px solid #e4e4e7; border-radius: 8px; padding: 8px 12px; font-size: 13px; color: #71717a; }
+  .stat b { color: #18181b; font-size: 15px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 22px 0 14px; }
+  .metricbar { display: flex; flex-wrap: wrap; gap: 8px; }
+  .metric { border: 1px solid #e4e4e7; background: #ffffff; color: #3f3f46; border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .metric.active { background: #18181b; border-color: #18181b; color: #ffffff; }
+  select { margin-left: auto; border: 1px solid #e4e4e7; background: #ffffff; border-radius: 8px; padding: 7px 10px; font-size: 13px; color: #3f3f46; }
+  .card { display: flex; gap: 14px; background: #ffffff; border: 1px solid #e4e4e7; border-radius: 12px; padding: 16px 18px; margin-bottom: 10px; }
+  .rank { flex: none; width: 34px; height: 34px; border-radius: 8px; background: #f4f4f5; color: #71717a; font-weight: 700; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+  .cardbody { min-width: 0; flex: 1; }
+  .card h2 { font-size: 16px; line-height: 1.35; font-weight: 600; }
+  .card h2 a { color: #18181b; }
+  .meta { color: #71717a; font-size: 12.5px; padding-top: 3px; }
+  .seen { color: #4f46e5; font-weight: 600; }
+  .summary { color: #52525b; font-size: 13.5px; line-height: 1.55; padding-top: 8px; }
+  .scoreside { flex: none; text-align: right; }
+  .big { font-size: 22px; font-weight: 700; }
+  .big span { font-size: 12px; font-weight: 400; color: #a1a1aa; }
+  .totalchip { display: inline-block; margin-top: 6px; background: #f4f4f5; border-radius: 6px; padding: 3px 8px; font-size: 12px; font-weight: 700; }
+  .empty { background: #ffffff; border: 1px dashed #d4d4d8; border-radius: 12px; padding: 40px 20px; text-align: center; color: #71717a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">Idea Scout</div>
+  <h1>Top ideas dashboard</h1>
+  <div class="updated">Updated __UPDATED__</div>
+  <div class="stats" id="stats"></div>
+  <div class="controls">
+    <span class="metricbar" id="metrics"></span>
+    <select id="window">
+      <option value="0">All time</option>
+      <option value="30">Last 30 days</option>
+      <option value="7">Last 7 days</option>
+    </select>
+  </div>
+  <div id="list"></div>
+</div>
+<script>
+const RECORDS = __DATA__;
+const METRICS = [
+  { id: "total", label: "Overall", key: "total", asc: false, decimals: 1 },
+  { id: "payer", label: "Payer", key: "payer", asc: false, decimals: 0 },
+  { id: "demand", label: "Demand", key: "demand", asc: false, decimals: 0 },
+  { id: "revenue_3mo", label: "Revenue 3 mo", key: "revenue_3mo", asc: false, decimals: 0 },
+  { id: "buildable", label: "Buildable", key: "buildable", asc: false, decimals: 0 },
+  { id: "difficulty", label: "Easiest to build", key: "difficulty", asc: true, decimals: 0 }
+];
+let activeMetric = METRICS[0];
+let windowDays = 0;
+
+function withinWindow(dateStr) {
+  if (!windowDays) return true;
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - windowDays);
+  return new Date(dateStr + "T00:00:00") >= cutoff;
+}
+
+function dedupe(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = row.url || row.title.toLowerCase();
+    const group = groups.get(key);
+    if (!group) {
+      groups.set(key, { rec: row, dates: new Set([row.date]) });
+    } else {
+      group.dates.add(row.date);
+      if (row.date >= group.rec.date) group.rec = row;
+    }
+  }
+  return Array.from(groups.values()).map(function (g) {
+    const copy = Object.assign({}, g.rec);
+    copy.seen = g.dates.size;
+    return copy;
+  });
+}
+
+function renderStats() {
+  const stats = document.getElementById("stats");
+  stats.textContent = "";
+  const dates = new Set(RECORDS.map(function (r) { return r.date; }));
+  const pairs = [
+    ["ideas logged", RECORDS.length],
+    ["unique ideas", dedupe(RECORDS).length],
+    ["days covered", dates.size]
+  ];
+  pairs.forEach(function (pair) {
+    const el = document.createElement("div");
+    el.className = "stat";
+    const b = document.createElement("b");
+    b.textContent = pair[1];
+    el.appendChild(b);
+    el.append(" " + pair[0]);
+    stats.appendChild(el);
+  });
+}
+
+function renderControls() {
+  const bar = document.getElementById("metrics");
+  bar.textContent = "";
+  METRICS.forEach(function (m) {
+    const btn = document.createElement("button");
+    btn.className = "metric" + (m === activeMetric ? " active" : "");
+    btn.textContent = m.label;
+    btn.onclick = function () { activeMetric = m; renderControls(); build(); };
+    bar.appendChild(btn);
+  });
+}
+
+function build() {
+  const rows = dedupe(RECORDS.filter(function (r) { return withinWindow(r.date); }));
+  rows.sort(function (a, b) {
+    const diff = activeMetric.asc
+      ? a[activeMetric.key] - b[activeMetric.key]
+      : b[activeMetric.key] - a[activeMetric.key];
+    return diff !== 0 ? diff : b.total - a.total;
+  });
+  const top = rows.slice(0, 5);
+  const list = document.getElementById("list");
+  list.textContent = "";
+  if (!top.length) {
+    const empty = document.createElement("div");
+    empty.className = "empty";
+    empty.textContent = "No ideas logged in this window yet — records appear after each daily run.";
+    list.appendChild(empty);
+    return;
+  }
+  top.forEach(function (row, i) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const rank = document.createElement("div");
+    rank.className = "rank";
+    rank.textContent = "#" + (i + 1);
+
+    const body = document.createElement("div");
+    body.className = "cardbody";
+    const h2 = document.createElement("h2");
+    const link = document.createElement("a");
+    link.href = row.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = row.title;
+    h2.appendChild(link);
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.append(row.source + " · " + row.date + (row.points ? " · " + row.points + " points" : ""));
+    if (row.seen > 1) {
+      const seen = document.createElement("span");
+      seen.className = "seen";
+      seen.textContent = " · seen " + row.seen + "×";
+      meta.appendChild(seen);
+    }
+    const summary = document.createElement("div");
+    summary.className = "summary";
+    summary.textContent = row.summary;
+    body.appendChild(h2);
+    body.appendChild(meta);
+    body.appendChild(summary);
+
+    const side = document.createElement("div");
+    side.className = "scoreside";
+    const big = document.createElement("div");
+    big.className = "big";
+    const value = row[activeMetric.key];
+    big.textContent = activeMetric.decimals ? Number(value).toFixed(1) : String(value);
+    const unit = document.createElement("span");
+    unit.textContent = " /10";
+    big.appendChild(unit);
+    side.appendChild(big);
+    if (activeMetric.id !== "total") {
+      const chip = document.createElement("div");
+      chip.className = "totalchip";
+      chip.textContent = "total " + Number(row.total).toFixed(1);
+      side.appendChild(chip);
+    }
+
+    card.appendChild(rank);
+    card.appendChild(body);
+    card.appendChild(side);
+    list.appendChild(card);
+  });
+}
+
+document.getElementById("window").onchange = function () {
+  windowDays = parseInt(this.value, 10);
+  build();
+};
+
+renderStats();
+renderControls();
+build();
+</script>
+</body>
+</html>
+"""
+
+
+def write_dashboard(records: list[dict], updated: str) -> Path:
+    data = json.dumps(records, ensure_ascii=False).replace("</", "<\\/")
+    html_doc = _TEMPLATE.replace("__DATA__", data).replace("__UPDATED__", updated)
+    DASHBOARD_FILE.parent.mkdir(parents=True, exist_ok=True)
+    DASHBOARD_FILE.write_text(html_doc, encoding="utf-8")
+    return DASHBOARD_FILE

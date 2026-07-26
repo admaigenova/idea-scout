@@ -87,6 +87,26 @@ python scout.py
    Actions tab (turn on notifications for failed workflows in your GitHub
    settings if you want an alert).
 
+## Data log & dashboard
+
+Every real (non-dry-run) run appends the full ranked list — up to 10 ideas,
+more than the email shows — to [data/ideas.csv](data/ideas.csv) and regenerates
+[docs/index.html](docs/index.html), a self-contained dashboard showing the
+**top 5 ideas** by Overall score, Payer, Demand, Revenue 3 mo, Buildable, or
+Easiest-to-build, filterable to the last 7/30 days. Ideas seen on multiple
+days are deduplicated and marked "seen N×". The workflow commits both files
+back to the repo after each run.
+
+Ways to view the dashboard:
+
+- `git pull`, then double-click `docs/index.html` — works offline, no server.
+- Or enable GitHub Pages (**Settings → Pages → Deploy from a branch →
+  `main` / `docs`**) for a permanent URL. Note: on a free GitHub plan, Pages
+  requires the repository to be public.
+
+The CSV is a flat, analysis-ready table (one row per idea per day) — point
+Power BI or Excel at it whenever you want deeper slicing.
+
 ## Resend notes
 
 The default `onboarding@resend.dev` sender can only deliver **to the email

@@ -20,7 +20,8 @@ The object must match exactly this schema:
         "payer": int,
         "buildable": int,
         "demand": int,
-        "revenue_3mo": int
+        "revenue_3mo": int,
+        "difficulty": int
       },
       "total": float,
       "summary": str,
@@ -33,6 +34,7 @@ The object must match exactly this schema:
 Every score is an integer from 1 to 10. "total" is the weighted average, \
 rounded to one decimal place:
 total = payer*0.30 + demand*0.30 + revenue_3mo*0.25 + buildable*0.15
+"difficulty" is informational only and is NOT part of "total".
 Sort "ideas" by "total", highest first. Use double quotes for all keys and \
 strings and escape special characters correctly. If nothing is worth ranking, \
 return {"ideas": [], "skipped_summary": "..."} — never reply with anything \
@@ -66,6 +68,10 @@ here (1-3).
 - buildable (15% of total): whether this builder can ship a sellable MVP \
 with Python, SQL, Power BI, Azure and LLM integration. Heavy mobile, \
 hardware, or deep frontend work scores low.
+- difficulty (informational, NOT part of the total): how hard the MVP \
+itself is to develop, regardless of who builds it. 1-2 = a weekend script, \
+5 = a few months of solid part-time work, 9-10 = deep tech, heavy \
+infrastructure or years of engineering.
 
 RULES
 - Be sceptical. Most ideas are mediocre. Scores above 8 should be rare and \
@@ -74,8 +80,10 @@ must be justified by what the post actually says.
 not present in a post. Score only from what the post supports.
 - Copy title, url, points, comments and source into each idea exactly as \
 they appear in the input.
-- summary: 2-3 plain sentences — what the idea is and why it scored the way \
-it did.
+- summary: 3-5 plain sentences — what the product is, who the likely buyer \
+is, what demand evidence (if any) the post contains, and the biggest risk \
+or unknown. Be concrete: pull specifics from the post rather than writing \
+generic phrasing that could describe any idea.
 - verdict: one blunt sentence telling the builder what to do, e.g. "Worth a \
 weekend spike: ...", "Park until ...", "Skip: ...".
 - skipped_summary: 2-4 sentences describing the posts you skipped and the \

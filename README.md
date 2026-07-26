@@ -19,8 +19,9 @@ fetch (HN Algolia + Reddit RSS) -> analyse (claude-haiku-4-5) -> render (Jinja2)
   - Reddit API (PRAW): stubbed and disabled (`enabled=False`) until
     credentials exist.
 - **Analyse** — a single `claude-haiku-4-5` call scores every post 1–10 on
-  four dimensions: payer (30%), demand (30%), revenue in 3 months (25%),
-  buildable (15%). The rubric lives in [prompts.py](prompts.py) as
+  four weighted dimensions: payer (30%), demand (30%), revenue in 3 months
+  (25%), buildable (15%) — plus an unweighted difficulty-to-develop rating
+  that is shown in the email but never affects the ranking. The rubric lives in [prompts.py](prompts.py) as
   `SCORING_PROMPT`. The reply must be pure JSON; the parser strips markdown
   fences, retries once asking the model to fix broken JSON, recomputes the
   weighted totals locally and re-ranks.

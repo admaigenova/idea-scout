@@ -31,7 +31,7 @@ from jinja2 import Environment, FileSystemLoader
 from prompts import FIX_JSON_PROMPT, SCORING_PROMPT, SYSTEM_PROMPT
 
 MODEL = "claude-haiku-4-5"
-MAX_TOKENS = 4000
+MAX_TOKENS = 5000  # headroom for 10 ideas with 3-5 sentence summaries
 BODY_LIMIT = 1500          # max chars of post body sent to the model
 WORTH_IT_THRESHOLD = 6.0   # minimum total score for "worth your time"
 SCORE_WEIGHTS = {"payer": 0.30, "demand": 0.30, "revenue_3mo": 0.25, "buildable": 0.15}
@@ -259,6 +259,8 @@ def _normalise(result: dict, posts: list[Post]) -> dict:
         except (KeyError, TypeError, ValueError):
             print(f"[analyse] dropped malformed idea: {str(raw)[:120]}", file=sys.stderr)
             continue
+        # informational only — displayed in the email, never part of the total
+        scores["difficulty"] = max(1, min(10, _to_int(raw["scores"].get("difficulty"), 5)))
         idea = {
             "title": str(raw.get("title") or "(untitled)").strip(),
             "url": str(raw.get("url") or ""),

@@ -1,0 +1,10 @@
+anthropic==0.120.0
+feedparser==6.0.12
+Jinja2==3.1.6
+python-dotenv==1.2.2
+requests==2.34.2
+resend==2.34.0
+tzdata==2026.3
+
+# Only needed once the Reddit API (PRAW) source in scout.py is enabled:
+# praw==8.0.2

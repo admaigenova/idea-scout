@@ -1,0 +1,34 @@
+name: Idea Scout daily
+
+on:
+  schedule:
+    - cron: "0 12 * * *" # 12:00 UTC = 10 pm Melbourne (AEST; 11 pm during AEDT)
+  workflow_dispatch:
+
+jobs:
+  scout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # No continue-on-error anywhere: if scout.py exits non-zero, this step
+      # — and therefore the whole run — is marked failed.
+      - name: Run Idea Scout
+        run: python scout.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          # Optional — only used once the Reddit API (PRAW) source is enabled:
+          REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+          REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+          REDDIT_USER_AGENT: ${{ secrets.REDDIT_USER_AGENT }}

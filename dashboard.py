@@ -20,7 +20,7 @@ _TEMPLATE = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Idea Scout dashboard</title>
+<title>The Scout Report · Idea Scout</title>
 <style>
   :root {
     color-scheme: light;
@@ -40,6 +40,7 @@ _TEMPLATE = """<!DOCTYPE html>
   .wrap { max-width: 1060px; margin: 0 auto; }
   .brand { font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--s1); }
   h1 { font-size: 30px; letter-spacing: -0.02em; padding-top: 6px; }
+  .tagline { color: var(--ink2); font-size: 14px; padding-top: 7px; }
   .updated { color: var(--muted); font-size: 13px; padding-top: 5px; }
   .filterrow { display: flex; padding: 22px 0 16px; }
   .seg { border: 1px solid var(--ring); background: var(--surface); padding: 7px 14px; font-size: 13px; font-weight: 600; color: var(--ink2); cursor: pointer; }
@@ -51,6 +52,7 @@ _TEMPLATE = """<!DOCTYPE html>
   .tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 14px; padding: 15px 18px; box-shadow: 0 1px 2px rgba(11, 11, 11, 0.04); }
   .tile .label { font-size: 12.5px; color: var(--muted); }
   .tile .value { font-size: 29px; font-weight: 650; padding-top: 3px; letter-spacing: -0.01em; }
+  .tile .cap { font-size: 11.5px; color: var(--muted); padding-top: 4px; line-height: 1.4; }
   .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 12px; }
   @media (max-width: 760px) { .charts { grid-template-columns: 1fr; } }
   .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 14px; box-shadow: 0 1px 2px rgba(11, 11, 11, 0.04); }
@@ -92,7 +94,8 @@ _TEMPLATE = """<!DOCTYPE html>
 <body>
 <div class="wrap">
   <div class="brand">Idea Scout</div>
-  <h1>Top ideas dashboard</h1>
+  <h1>The Scout Report</h1>
+  <div class="tagline">Startup ideas scouted daily from Hacker News and Reddit, rated for a solo builder.</div>
   <div class="updated">Updated __UPDATED__</div>
 
   <div class="filterrow" id="windowseg">
@@ -116,7 +119,7 @@ _TEMPLATE = """<!DOCTYPE html>
 
   <section class="card listcard">
     <div class="listhead">
-      <div class="cardtitle">Top 5 ideas</div>
+      <div class="cardtitle">Top prospects</div>
       <span class="metricbar" id="metrics"></span>
     </div>
     <div id="list"></div>
@@ -375,26 +378,37 @@ function lineChart(container, days) {
 function renderTiles(rows) {
   const tiles = document.getElementById("tiles");
   tiles.textContent = "";
-  const dates = new Set(rows.map(function (r) { return r.date; }));
-  let best = 0;
-  rows.forEach(function (r) { if (r.total > best) best = r.total; });
-  const pairs = [
-    ["Ideas logged", String(rows.length)],
-    ["Unique ideas", String(dedupe(rows).length)],
-    ["Days covered", String(dates.size)],
-    ["Best score", rows.length ? Number(best).toFixed(1) : "—"]
+  const uniq = dedupe(rows);
+  const worth = uniq.filter(function (r) { return r.total >= 6; });
+  const quick = worth.filter(function (r) { return r.difficulty <= 4; });
+  const repeats = uniq.filter(function (r) { return r.seen >= 2; });
+  let best = null;
+  uniq.forEach(function (r) { if (!best || r.total > best.total) best = r; });
+  let bestCap = "no ideas in this window";
+  if (best) {
+    bestCap = best.title.length > 48 ? best.title.slice(0, 47) + "…" : best.title;
+  }
+  const defs = [
+    ["Worth pursuing", String(worth.length), "ideas scoring 6.0 or higher"],
+    ["Quick wins", String(quick.length), "6.0+ with difficulty 4 or less"],
+    ["Repeat signals", String(repeats.length), "same idea seen on 2+ days"],
+    ["Best score", best ? Number(best.total).toFixed(1) : "—", bestCap]
   ];
-  pairs.forEach(function (pair) {
+  defs.forEach(function (d) {
     const tile = document.createElement("div");
     tile.className = "tile";
     const label = document.createElement("div");
     label.className = "label";
-    label.textContent = pair[0];
+    label.textContent = d[0];
     const value = document.createElement("div");
     value.className = "value";
-    value.textContent = pair[1];
+    value.textContent = d[1];
+    const cap = document.createElement("div");
+    cap.className = "cap";
+    cap.textContent = d[2];
     tile.appendChild(label);
     tile.appendChild(value);
+    tile.appendChild(cap);
     tiles.appendChild(tile);
   });
 }
